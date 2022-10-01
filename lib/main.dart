@@ -1,32 +1,28 @@
 import 'dart:async';
 import 'dart:io';
-
 import 'package:camera/camera.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:gallery_saver/gallery_saver.dart';
 import 'package:flutter/material.dart';
+import 'dart:developer';
 
 Future<void> main() async {
-  // Ensure that plugin services are initialized so that `availableCameras()`
-  // can be called before `runApp()`
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Obtain a list of the available cameras on the device.
   final cameras = await availableCameras();
-
-  // Get a specific camera from the list of available cameras.
   final firstCamera = cameras.first;
+  print(firstCamera.runtimeType);
 
   runApp(
     MaterialApp(
-      theme: ThemeData.dark(),
-      home: TakePictureScreen(
-        // Pass the appropriate camera to the TakePictureScreen widget.
-        camera: firstCamera,
+      home: Scaffold(
+        body: Center(
+          child: Menu(camera: firstCamera)
+        )
       ),
     ),
   );
 }
 
-// A screen that allows users to take a picture using a given camera.
 class TakePictureScreen extends StatefulWidget {
   const TakePictureScreen({
     super.key,
@@ -46,107 +42,214 @@ class TakePictureScreenState extends State<TakePictureScreen> {
   @override
   void initState() {
     super.initState();
-    // To display the current output from the Camera,
-    // create a CameraController.
     _controller = CameraController(
-      // Get a specific camera from the list of available cameras.
       widget.camera,
-      // Define the resolution to use.
       ResolutionPreset.medium,
     );
 
-    // Next, initialize the controller. This returns a Future.
     _initializeControllerFuture = _controller.initialize();
   }
 
   @override
   void dispose() {
-    // Dispose of the controller when the widget is disposed.
     _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Take a picture')),
-      // You must wait until the controller is initialized before displaying the
-      // camera preview. Use a FutureBuilder to display a loading spinner until the
-      // controller has finished initializing.
-      body: FutureBuilder<void>(
-        future: _initializeControllerFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.done) {
-            // If the Future is complete, display the preview.
-            return CameraPreview(_controller);
-          } else {
-            // Otherwise, display a loading indicator.
-            return const Center(child: CircularProgressIndicator());
-          }
-        },
-      ),
-      floatingActionButton: FloatingActionButton(
-        // Provide an onPressed callback.
-        onPressed: () async {
-          // Take the Picture in a try / catch block. If anything goes wrong,
-          // catch the error.
-          try {
-            // Ensure that the camera is initialized.
-            await _initializeControllerFuture;
-
-            // Attempt to take a picture and get the file `image`
-            // where it was saved.
-            final image = await _controller.takePicture();
-            stderr.writeln(image);
-            if (!mounted) return;
-
-            // If the picture was taken, display it on a new screen.
-            await Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => DisplayPictureScreen(
-                  // Pass the automatically generated path to
-                  // the DisplayPictureScreen widget.
-                  imagePath: image.path,
+    return Column(
+      // crossAxisAlignment: CrossAxisAlignment.center,
+      // mainAxisSize: MainAxisSize.min,
+      children: [
+        // camera preview
+        FutureBuilder<void>(
+          future: _initializeControllerFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.done) {
+              return CameraPreview(_controller);
+            } else {
+              return const Center(child: CircularProgressIndicator());
+            }
+          },
+        ),
+        Container(
+          // padding: const EdgeInsets.only(bottom: .0),
+          // margin:  const EdgeInsets.only(bottom: 80),
+          color: Colors.white70,
+          child: Row(
+            // mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: <Widget>[
+              Expanded(
+                  child: Visibility(
+                    visible: false,
+                    child: Text('dumy'),
+                  )
+              ),
+              Expanded(
+                child: IconButton(
+                    onPressed: () async {
+                      print('押された');
+                      try{
+                        await _initializeControllerFuture;
+                        final image = await _controller.takePicture();
+                        if(!mounted) return;
+                        showDialog<void>(
+                          context: context,
+                          builder: (_) {
+                            return DialogExample(imagePath: image.path);
+                          }
+                        );
+                      }catch(e) {
+                        print(e);
+                      }
+                    },
+                    iconSize: 85,
+                    color: CupertinoColors.systemBlue,
+                    icon: const Icon(Icons.radio_button_unchecked)
                 ),
               ),
-            );
-          } catch (e) {
-            // If an error occurs, log the error to the console.
-            print(e);
-          }
-        },
-          child: const Icon(Icons.camera_alt),
-      ),
+              Expanded(
+                child: IconButton(
+                    onPressed: () {
+                      print('押された2');
+                    },
+                    iconSize: 60,
+                    color: Colors.grey,
+                    icon: const Icon(Icons.space_dashboard_outlined)
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
 
-// A widget that displays the picture taken by the user.
+class DialogExample extends StatelessWidget {
+  final String imagePath;
+  const DialogExample({super.key, required this.imagePath});
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      // content: Text('画像をシェアする'),
+      content: DisplayPictureScreen(imagePath: imagePath),
+      actions: <Widget>[
+        Center(
+          child: TextButton(
+            onPressed: () => Navigator.pop(context, 'Cancel'),
+            child: const Text('閉じる'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class DisplayPictureScreen extends StatelessWidget {
   final String imagePath;
-
   const DisplayPictureScreen({super.key, required this.imagePath});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Display the Picture')),
-      // The image is stored as a file on the device. Use the `Image.file`
-      // constructor with the given path to display the image.
-      body: Column(
-        children: [
-          Image.file(File(imagePath)),
-          TextButton(
-            style: ButtonStyle(
-              foregroundColor: MaterialStateProperty.all<Color>(Colors.blue),
-            ),
-            onPressed: () {
-              debugPrint(imagePath);
-            },
-            child: const Text('保存'),
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: <Widget>[
+        Image.file(
+          File(imagePath),
+        ),
+        TextButton(
+          onPressed: () async {
+            try{
+              await GallerySaver.saveImage(imagePath);
+            }catch(e){
+              print(e);
+            }
+          },
+          child: const Text('保存する'),
+        ),
+        Container(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              IconButton(
+                onPressed: () {
+                  print('押された4');
+                },
+                padding: EdgeInsets.all(0),
+                iconSize: 80,
+                color: Colors.grey,
+                icon: const Icon(Icons.space_dashboard_outlined)
+              ),
+              IconButton(
+                  onPressed: () {
+                    print('押された5');
+                  },
+                  padding: EdgeInsets.all(0),
+                  iconSize: 80,
+                  color: Colors.grey,
+                  icon: const Icon(Icons.space_dashboard_outlined)
+              ),
+              IconButton(
+                  onPressed: () {
+                    print('押された6');
+                  },
+                  padding: EdgeInsets.all(0),
+                  iconSize: 80,
+                  color: Colors.grey,
+                  icon: const Icon(Icons.space_dashboard_outlined)
+              ),
+            ],
           ),
+        ),
+      ]
+    );
+  }
+}
+
+class Menu extends StatelessWidget {
+  CameraDescription camera;
+  Menu({super.key, required this.camera});
+
+  static const btnTitles = ['ランキング', '撮影', 'プロフィール'];
+  static const icons = <IconData>[CupertinoIcons.chart_bar, CupertinoIcons.camera, CupertinoIcons.person];
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoTabScaffold(
+      tabBar: CupertinoTabBar(
+        height: 65.0,
+        items: <BottomNavigationBarItem>[
+          for(var i = 0; i < 3; i++)
+            BottomNavigationBarItem(
+              // icon: Icon(CupertinoIcons.chart),
+              icon: Icon(icons[i]),
+              label: btnTitles[i],
+            ),
         ],
       ),
+      tabBuilder: (BuildContext context, int index){
+        return CupertinoTabView(
+          builder: (BuildContext context){
+            return Center(
+              // child: Text('Context of tab $index'),
+              child: (index == 1)? CameraPageWrap(camera: camera) : Text('その他のページ')
+            );
+          },
+        );
+      }
     );
+  }
+}
+
+class CameraPageWrap extends StatelessWidget {
+  CameraDescription camera;
+  CameraPageWrap({required this.camera});
+
+  @override
+  Widget build(BuildContext context){
+    return TakePictureScreen(camera: camera);
   }
 }
