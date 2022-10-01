@@ -1,115 +1,255 @@
+import 'dart:async';
+import 'dart:io';
+import 'package:camera/camera.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:gallery_saver/gallery_saver.dart';
 import 'package:flutter/material.dart';
+import 'dart:developer';
 
-void main() {
-  runApp(const MyApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final cameras = await availableCameras();
+  final firstCamera = cameras.first;
+  print(firstCamera.runtimeType);
+
+  runApp(
+    MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: Menu(camera: firstCamera)
+        )
+      ),
+    ),
+  );
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({Key? key}) : super(key: key);
+class TakePictureScreen extends StatefulWidget {
+  const TakePictureScreen({
+    super.key,
+    required this.camera,
+  });
 
-  // This widget is the root of your application.
+  final CameraDescription camera;
+
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // Try running your application with "flutter run". You'll see the
-        // application has a blue toolbar. Then, without quitting the app, try
-        // changing the primarySwatch below to Colors.green and then invoke
-        // "hot reload" (press "r" in the console where you ran "flutter run",
-        // or simply save your changes to "hot reload" in a Flutter IDE).
-        // Notice that the counter didn't reset back to zero; the application
-        // is not restarted.
-        primarySwatch: Colors.blue,
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+  TakePictureScreenState createState() => TakePictureScreenState();
+}
+
+class TakePictureScreenState extends State<TakePictureScreen> {
+  late CameraController _controller;
+  late Future<void> _initializeControllerFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = CameraController(
+      widget.camera,
+      ResolutionPreset.medium,
     );
+
+    _initializeControllerFuture = _controller.initialize();
   }
-}
-
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({Key? key, required this.title}) : super(key: key);
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Invoke "debug painting" (press "p" in the console, choose the
-          // "Toggle Debug Paint" action from the Flutter Inspector in Android
-          // Studio, or the "Toggle Debug Paint" command in Visual Studio Code)
-          // to see the wireframe for each widget.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text(
-              'You have pushed the button this many times:',
-            ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headline4,
-            ),
-          ],
+    return Column(
+      // crossAxisAlignment: CrossAxisAlignment.center,
+      // mainAxisSize: MainAxisSize.min,
+      children: [
+        // camera preview
+        FutureBuilder<void>(
+          future: _initializeControllerFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.done) {
+              return CameraPreview(_controller);
+            } else {
+              return const Center(child: CircularProgressIndicator());
+            }
+          },
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
+        Container(
+          // padding: const EdgeInsets.only(bottom: .0),
+          // margin:  const EdgeInsets.only(bottom: 80),
+          color: Colors.white70,
+          child: Row(
+            // mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: <Widget>[
+              Expanded(
+                  child: Visibility(
+                    visible: false,
+                    child: Text('dumy'),
+                  )
+              ),
+              Expanded(
+                child: IconButton(
+                    onPressed: () async {
+                      print('押された');
+                      try{
+                        await _initializeControllerFuture;
+                        final image = await _controller.takePicture();
+                        if(!mounted) return;
+                        showDialog<void>(
+                          context: context,
+                          builder: (_) {
+                            return DialogExample(imagePath: image.path);
+                          }
+                        );
+                      }catch(e) {
+                        print(e);
+                      }
+                    },
+                    iconSize: 85,
+                    color: CupertinoColors.systemBlue,
+                    icon: const Icon(Icons.radio_button_unchecked)
+                ),
+              ),
+              Expanded(
+                child: IconButton(
+                    onPressed: () {
+                      print('押された2');
+                    },
+                    iconSize: 60,
+                    color: Colors.grey,
+                    icon: const Icon(Icons.space_dashboard_outlined)
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
+  }
+}
+
+class DialogExample extends StatelessWidget {
+  final String imagePath;
+  const DialogExample({super.key, required this.imagePath});
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      // content: Text('画像をシェアする'),
+      content: DisplayPictureScreen(imagePath: imagePath),
+      actions: <Widget>[
+        Center(
+          child: TextButton(
+            onPressed: () => Navigator.pop(context, 'Cancel'),
+            child: const Text('閉じる'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class DisplayPictureScreen extends StatelessWidget {
+  final String imagePath;
+  const DisplayPictureScreen({super.key, required this.imagePath});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: <Widget>[
+        Image.file(
+          File(imagePath),
+        ),
+        TextButton(
+          onPressed: () async {
+            try{
+              await GallerySaver.saveImage(imagePath);
+            }catch(e){
+              print(e);
+            }
+          },
+          child: const Text('保存する'),
+        ),
+        Container(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              IconButton(
+                onPressed: () {
+                  print('押された4');
+                },
+                padding: EdgeInsets.all(0),
+                iconSize: 80,
+                color: Colors.grey,
+                icon: const Icon(Icons.space_dashboard_outlined)
+              ),
+              IconButton(
+                  onPressed: () {
+                    print('押された5');
+                  },
+                  padding: EdgeInsets.all(0),
+                  iconSize: 80,
+                  color: Colors.grey,
+                  icon: const Icon(Icons.space_dashboard_outlined)
+              ),
+              IconButton(
+                  onPressed: () {
+                    print('押された6');
+                  },
+                  padding: EdgeInsets.all(0),
+                  iconSize: 80,
+                  color: Colors.grey,
+                  icon: const Icon(Icons.space_dashboard_outlined)
+              ),
+            ],
+          ),
+        ),
+      ]
+    );
+  }
+}
+
+class Menu extends StatelessWidget {
+  CameraDescription camera;
+  Menu({super.key, required this.camera});
+
+  static const btnTitles = ['ランキング', '撮影', 'プロフィール'];
+  static const icons = <IconData>[CupertinoIcons.chart_bar, CupertinoIcons.camera, CupertinoIcons.person];
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoTabScaffold(
+      tabBar: CupertinoTabBar(
+        height: 65.0,
+        items: <BottomNavigationBarItem>[
+          for(var i = 0; i < 3; i++)
+            BottomNavigationBarItem(
+              // icon: Icon(CupertinoIcons.chart),
+              icon: Icon(icons[i]),
+              label: btnTitles[i],
+            ),
+        ],
+      ),
+      tabBuilder: (BuildContext context, int index){
+        return CupertinoTabView(
+          builder: (BuildContext context){
+            return Center(
+              // child: Text('Context of tab $index'),
+              child: (index == 1)? CameraPageWrap(camera: camera) : Text('その他のページ')
+            );
+          },
+        );
+      }
+    );
+  }
+}
+
+class CameraPageWrap extends StatelessWidget {
+  CameraDescription camera;
+  CameraPageWrap({required this.camera});
+
+  @override
+  Widget build(BuildContext context){
+    return TakePictureScreen(camera: camera);
   }
 }
